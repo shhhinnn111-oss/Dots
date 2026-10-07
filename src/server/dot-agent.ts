@@ -287,7 +287,11 @@ export class DotAgent extends AbstractAgent {
           api: 'chat-completions',
           maxRetries: 1,
           ...(isGoogleOpenAIEndpoint(baseURL)
-            ? { fetch: geminiToolCallFetch() }
+            ? {
+                fetch: geminiToolCallFetch(
+                  `${baseURL}|${this.config.model}|${input.threadId}`,
+                ),
+              }
             : {}),
         });
         const serverTools = [

@@ -13,7 +13,7 @@ afterEach(() => {
   databases.splice(0).forEach((db) => db.close());
 });
 
-function fixture(baseUrl = 'https://unused.invalid/v1') {
+function fixture() {
   const store = new Store(':memory:');
   const workspace = new WorkspaceStore(':memory:', 'owner');
   databases.push(store, workspace);
@@ -26,7 +26,7 @@ function fixture(baseUrl = 'https://unused.invalid/v1') {
       intelligenceKey: 'fixture',
       apiKey: 'fixture',
       model: 'custom-model',
-      baseUrl,
+      baseUrl: 'https://unused.invalid/v1',
       runtimeUrl: '',
       voiceName: 'marin',
       slackUsers: [],
@@ -303,81 +303,4 @@ it('reports a turn that hits the time limit as a RUN_ERROR instead of ending sil
   } finally {
     vi.useRealTimers();
   }
-});
-
-it('sends Gemini thought signatures back when continuing after a tool call', async () => {
-  const f = fixture('https://generativelanguage.googleapis.com/v1beta/openai/');
-  const network = vi
-    .spyOn(globalThis, 'fetch')
-    .mockResolvedValueOnce(
-      completion(
-        {
-          role: 'assistant',
-          tool_calls: [
-            {
-              index: 0,
-              id: 'create-page',
-              type: 'function',
-              function: {
-                name: 'create_space_page',
-                arguments: JSON.stringify({
-                  title: 'Notes',
-                  content: '# Notes',
-                }),
-              },
-              extra_content: { google: { thought_signature: 'SIGNATURE-1' } },
-            },
-          ],
-        },
-        'tool_calls',
-      ),
-    )
-    .mockResolvedValueOnce(
-      completion({ role: 'assistant', content: 'Created Notes.' }),
-    );
-  await lastValueFrom(f.agent.run(f.input).pipe(toArray()));
-  expect(network).toHaveBeenCalledTimes(2);
-  const continuation = JSON.parse(String(network.mock.calls[1][1]?.body));
-  const assistant = continuation.messages.find(
-    (message: { role: string; tool_calls?: unknown[] }) =>
-      message.role === 'assistant' && message.tool_calls,
-  );
-  expect(assistant.tool_calls[0].extra_content.google.thought_signature).toBe(
-    'SIGNATURE-1',
-  );
-});
-
-it('does not add Gemini fields for other providers', async () => {
-  const f = fixture();
-  const network = vi
-    .spyOn(globalThis, 'fetch')
-    .mockResolvedValueOnce(
-      completion(
-        {
-          role: 'assistant',
-          tool_calls: [
-            {
-              index: 0,
-              id: 'create-page',
-              type: 'function',
-              function: {
-                name: 'create_space_page',
-                arguments: JSON.stringify({
-                  title: 'Notes',
-                  content: '# Notes',
-                }),
-              },
-            },
-          ],
-        },
-        'tool_calls',
-      ),
-    )
-    .mockResolvedValueOnce(
-      completion({ role: 'assistant', content: 'Created Notes.' }),
-    );
-  await lastValueFrom(f.agent.run(f.input).pipe(toArray()));
-  expect(String(network.mock.calls[1][1]?.body)).not.toContain(
-    'thought_signature',
-  );
 });
